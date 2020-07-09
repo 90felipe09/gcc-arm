@@ -6,7 +6,6 @@
 
 @Para compilar junto
 @arm-elf-gcc -Wall -g -o programa-final.out main.c int2str.s division.s
-
 @To run and debug:
 @gdb programa-final.out
 @(gdb) target sim
