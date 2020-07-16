@@ -10,5 +10,7 @@ SECTIONS
  .bss : { *(.bss COMMON) }
  . = ALIGN(8);
  . = . + 0x1000; /* 4kB of stack memory */
- stack_top = .;
+ supervisor_stack_top = .;
+ . = . + 0x1000; /* 4kB of stack memory */
+ undefined_stack_top = .;
 }

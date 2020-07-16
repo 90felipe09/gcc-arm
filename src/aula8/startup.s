@@ -16,14 +16,15 @@ Reset_Handler:
   MSR cpsr_ctl, #0b11011011 @ muda para modo undefined
   LDR sp, =undefined_stack_top
   MSR cpsr, r0
-  BL c_entry
   .word 0xFFFFFFFF
+  BL c_entry
+  MRS r0, cpsr
+  MSR cpsr_ctl, #0b11010000
+  MSR cpsr, r0
   B .
 
 Undefined_Handler:
-    LDR sp, =stack_top
-    BL Undefined
-    B .
+  STMFD sp!,{r0-r12,lr}
+  BL Undefined
+  LDMFD sp!,{r0-r12,pc}^ 
 
-undefined_stack_top: .word 0x2000
-supervisor_stack_top: .word 0x1000
