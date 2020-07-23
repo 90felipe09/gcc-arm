@@ -101,7 +101,6 @@ do_software_interrupt:
     mov pc, lr
 
 do_irq_interrupt:
-    @ PRINT: Valor do lr 
     sub lr, lr, #0x4
     stmfd sp!, {r0-r3, lr}
     
@@ -198,6 +197,12 @@ main:
     bl timer_init @ Inicializar interrupções e o timer 0
 stop:
     bl print
+    ldr r0, =0xFFFF
+print_loop:
+    sub r0, r0, #1
+    CMP r0, #0
+    BNE print_loop
+
     b stop
 
 @ Só para inicializar as pilhas
