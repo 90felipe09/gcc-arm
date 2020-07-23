@@ -1,3 +1,11 @@
+//Esse código foi desenvolvido para a aula 3 do curso PCS3732- Laboratório de Processadores - 2020
+//Feito pelos alunos:
+//Felipe Kenzo Shiraishi - 10262700
+//Hector Kobayashi Yassuda - 10333289
+//Vitor Hugo Perles - 9285492
+
+//Para compilar, rodar e debugar: Ler READ.ME em anexo
+
 volatile unsigned int * const UART0DR = (unsigned int *)0x101f1000;
 
 void print_uart0(const char *s){
