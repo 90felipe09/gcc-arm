@@ -1,4 +1,4 @@
-//Esse código foi desenvolvido para a aula 3 do curso PCS3732- Laboratório de Processadores - 2020
+//Esse código foi desenvolvido para a aula 10 do curso PCS3732- Laboratório de Processadores - 2020
 //Feito pelos alunos:
 //Felipe Kenzo Shiraishi - 10262700
 //Hector Kobayashi Yassuda - 10333289
