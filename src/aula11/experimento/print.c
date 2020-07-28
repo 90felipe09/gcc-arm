@@ -30,3 +30,11 @@ void print() {
 void print_interrupt() {
     print_uart0("#");
 }
+
+void print1(){
+    print_uart0("1");
+}
+
+void print2(){
+    print_uart0("2");
+}

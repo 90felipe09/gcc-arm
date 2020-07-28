@@ -101,19 +101,79 @@ do_software_interrupt:
     mov pc, lr
 
 do_irq_interrupt:
-    sub lr, lr, #0x4
-    stmfd sp!, {r0-r3, lr}
+    @ Inicia o armazenamento em linha de rascunho
+    sub lr, lr, #4  @ Corrige lr
+    str r0, linha_draft  @ Armazena pelo menos o r0
+    adr r0, linha_draft  @ Usa r0 para ser o endereço de linhaA
+    add r0, r0, #4  @ Soma 4 para o endereço de linhaA
+    stmia r0!, {r1-r12}  @ armazena o resto dos registradores
+    mrs r1, cpsr
+    msr cpsr_ctl, #0b11010011   @ Supervisor (O bit 7 é o I de interrupção. setar ele garante o correto funcionamento)
+    stmia r0!, {sp, lr}  @ guarda sp e lr próprios do processo
+    msr cpsr, r1    @ recupera o cpsr
+    ldr r1, linha_draft
+    stmia r0!, {r1}  @ é o r0 do programa principal
+    mrs r1, spsr    @ pega o cpsr do supervisor
+    stmia r0!, {r1}  @ Guarda o cpsr do processo principal
+    str lr, linha_draft  @Guarda o pc na primeira posição de linhaA
+    @ resultado: pc - r1 a r12 - sp - lr - r0 - cpsr
+    @ Confere se linhaA ou linhaB
+    ldr r0, nproc
+    cmp r0, #0
+    adr r1, linha_draft
+    adreq r0, linhaA    @ LinhaA?
+    adrne r0, linhaB    @ Linha B?
+    @ Armazena no local apropriado
+    ldmia r1!, {r2-r12} @ r0 - r10
+    stmia r0!, {r2-r12} 
+    ldmia r1!, {r2-r7} @ r11, r12, sp, lr, pc, cpsr
+    stmia r0!, {r2-r7}
+    @Chaveando
+    adr r0, nproc
+    ldreq r1, =1
+    ldrne r1, =0
+    streq r1, [r0]
+    strne r1, [r0]
+    @ Termina o armazenamento
     
-    bl print_interrupt
+    @bl print_interrupt Exercício da aula 10
 
     ldr r0, INTPND  @ Referência para o registrador de status de interrupção
     ldr r0, [r0]    @ Pega o valor
 
     tst r0, #0x0010 @ testa se a interrupção é do timer (0b0001 0000)
-    @ PRINT: do cpsr para verificar as flags (FLAG Z)
     blne handler_timer   @ Assim sendo, invoca o handler
 
-    ldmfd sp!,{r0-r3,pc}^
+    @ Verifica para qual processo voltar
+    ldr r0, nproc
+    cmp r0, #0
+    @ Inicia a recuperação de linhaA
+    adreq r12, linhaA  @ Carrega em r12 o endereço da linhaA
+    adrne r12, linhaB   @ Carrega em r12 o endereço de linhaB
+    add r12, r12, #4
+    ldmia r12!, {r1-r11} @ recupera os registradores r1-r11
+    mov r0, r12
+    ldmia r0!, {r12} 
+    mrs r1, cpsr
+    msr cpsr_ctl, #0b11010011   @ Supervisor
+    ldmia r0!, {sp, lr} @ r0 agora aponta para o valor de pc
+    msr cpsr, r1    @ retorna ao estado de IRQ
+    add r0, r0, #4 @ pula r0
+    ldmia r0!, {r1} @ guarda em r1 o cpsr
+    adreq r0, linhaA
+    adrne r0, linhaB
+    beq retornaA
+retornaB:
+    msr cpsr, r1    @ faz o cpsr voltar ao estado do processo em modo usuário
+    ldr r1, [r0, #4]    @ recupera o valor de r1
+    ldr r0, [r0, #60]   @ recupera o valor de r0
+    ldr pc, linhaB
+retornaA:
+    msr cpsr, r1    @ faz o cpsr voltar ao estado do processo em modo usuário
+    ldr r1, [r0, #4]    @ recupera o valor de r1
+    ldr r0, [r0, #60]   @ recupera o valor de r0
+    ldr pc, linhaA  @ Volta à execução
+    @ Termina a recuperação da linhaA
     
 
 @ Handler timer
@@ -167,7 +227,7 @@ timer_init:
     mov r1, #0xA0   @ Em binário: 0b1010 0000
     str r1, [r0]    @ Habilita timer, default mode, habilita interrupç~ao, prescaler de 0, contador de 16 bits, wrapped mode
     ldr r0, TIMEROL @ Referêncai para o registrador de valor
-    mov r1, #0xff   @ Em binário: 0b1111 1111
+    ldr r1, =0xffff   @ Em binário: 0b1111 1111
     str r1, [r0]    @ Fazer o timer contar a partir de 255 e ir decrementando
 
     mrs r0, cpsr
@@ -195,15 +255,28 @@ timer_init:
 @ main
 main:
     bl timer_init @ Inicializar interrupções e o timer 0
-stop:
-    bl print
-    ldr r0, =0xFFFF
-print_loop:
-    sub r0, r0, #1
-    CMP r0, #0
-    BNE print_loop
 
-    b stop
+@ Task A para printar 1
+taskA:
+    bl print1
+    ldr r0, =0xFFFF
+printA_loop:
+    sub r0, r0, #1
+    cmp r0, #0
+    bne printA_loop
+
+    b taskA
+
+@ Task B para printar 2
+taskB:
+    bl print2
+    ldr r0, =0xFFFF
+printB_loop:
+    sub r0, r0, #1
+    cmp r0, #0
+    bne printB_loop
+
+    b taskB
 
 @ Só para inicializar as pilhas
 @ MODOS:
@@ -230,3 +303,18 @@ initialize_stacks:
     LDR sp, =IRQ_stack_top
     MSR cpsr, r0
     LDMFD sp!,{r0,pc}
+
+nproc: .word 0
+linhaA: .word 0x1ac
+linhaA_regs: .space 48 @68 - 5 * 4
+linhaA_sp: .word supervisor_stack_top
+linhaA_lr: .word 0
+linhaA_r0: .word 0
+linhaA_cpsr: .word 0x13
+linhaB: .word 0x1c4
+linhaB_regs: .space 48
+linhaB_sp: .word 0x8000
+linhaB_lr: .word 0
+linhaB_r0: .word 0
+linhaB_cpsr: .word 0x13
+linha_draft: .space 68

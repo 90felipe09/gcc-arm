@@ -1,32 +1,15 @@
-Como executar este experimento:
-
-1 PARTE:
-
-eabi-as irq.s -o irq.o
-eabi-ld -T linker.ld irq.o -o timer.elf
-eabi-bin timer.elf timer.bin
-qemu timer.elf
-
-para entrar no outro docker:
-docker exec -ti [nome_do_docker] bash
-su student
-
-no outro docker:
-eabi-qemu -se timer.elf
-
-
-2 PARTE:
+Como rodar:
 
 eabi-gcc handler_timer.c -o handler_timer.o
 eabi-gcc print.c -o print.o
 eabi-as irq.s -o irq.o
-eabi-ld -T linker.ld irq.o handler_timer.o print.o -o timer.elf
-eabi-bin timer.elf timer.bin
-qemu timer.elf
+eabi-ld -T linker.ld irq.o handler_timer.o print.o -o scheduler.elf
+eabi-bin scheduler.elf scheduler.bin
+qemu scheduler.elf
 
 para entrar no outro docker:
 docker exec -ti [nome_do_docker] bash
 su student
 
 no outro docker:
-eabi-qemu -se timer.elf
+eabi-qemu -se scheduler.elf
