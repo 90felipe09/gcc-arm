@@ -262,4 +262,4 @@ initialize_stacks:
     MSR cpsr, r0
     LDMFD sp!,{r0,pc}
 
-linhaA: .space 76
+linhaA: .space 68
