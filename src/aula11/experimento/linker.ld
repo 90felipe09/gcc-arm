@@ -19,4 +19,10 @@ SECTIONS{
     IRQ_stack_top = .;
     . = . + 0x1000; /* 4kB of stack memory */
     FIQ_stack_top = .;
+    . = . + 0x1000; /* 4kB of stack memory */
+    taskA_stack_top = .;
+    . = . + 0x1000; /* 4kB of stack memory */
+    taskB_stack_top = .;
+    . = . + 0x1000; /* 4kB of stack memory */
+    taskC_stack_top = .;
 }

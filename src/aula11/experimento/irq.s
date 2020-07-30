@@ -102,40 +102,77 @@ do_software_interrupt:
 
 do_irq_interrupt:
     @ Inicia o armazenamento em linha de rascunho
-    sub lr, lr, #4  @ Corrige lr
-    str r0, linha_draft  @ Armazena pelo menos o r0
-    adr r0, linha_draft  @ Usa r0 para ser o endereço de linhaA
-    add r0, r0, #4  @ Soma 4 para o endereço de linhaA
-    stmia r0!, {r1-r12}  @ armazena o resto dos registradores
-    mrs r1, cpsr
-    msr cpsr_ctl, #0b11010011   @ Supervisor (O bit 7 é o I de interrupção. setar ele garante o correto funcionamento)
-    stmia r0!, {sp, lr}  @ guarda sp e lr próprios do processo
-    msr cpsr, r1    @ recupera o cpsr
-    ldr r1, linha_draft
-    stmia r0!, {r1}  @ é o r0 do programa principal
-    mrs r1, spsr    @ pega o cpsr do supervisor
-    stmia r0!, {r1}  @ Guarda o cpsr do processo principal
-    str lr, linha_draft  @Guarda o pc na primeira posição de linhaA
+    sub lr, lr, #4              @ Corrige lr
+
+    @ Obtenção da linha respectiva do processo
+    str r0, register0_placeholder   @ Guarda r0 momentaneamente em register0_placeholder
+    str r1, register1_placeholder
+    str r2, register2_placeholder
+    adr r0, linhaA
+    ldr r1, linha_size
+    ldr r2, nproc
+    mla r0, r1, r2, r0
+    str r0, linhaX
+
+    ldr r0, register0_placeholder   @ recupera r0
+    ldr r1, linhaX
+    str r0, [r1, #4]            @ Guardar r0 em *linhaX+4
+    ldr r1, register1_placeholder   @ recupera r1
+    ldr r0, linhaX            @ Avançar r0 para *linhaX+8
+    add r0, r0, #8
+    stmia r0!,{r1-r12, lr}      @ Salvar r1-r12 e lr(PC do processo) em *linhaX+8 a *linhaX+60
+    mrs r1, spsr                @ Pega o CPSR do processo que estava rodando
+    ldr r2, linhaX
+    str r1, [r2]              @ Guarda em *linhaX o CPSR do processo que tava rodando
+
+    mrs r1, cpsr                @ Pega o cpsr atual
+    msr cpsr_ctl, #0b11010011   @ Só pega os bits de modo do supervisor com FIQ e IRQ desabilitados
+    stmia r0!, {sp, lr}         @ Guarda o sp e lr próprios do processo
+    msr cpsr, r1                @ Retorna ao cpsr do modo irq
+    @ Resultado: LinhaX: CPSR, R0 - R12, PC, SP, LR 
+
+    @str r0, linha_draft  @ Armazena pelo menos o r0
+    @adr r0, linha_draft  @ Usa r0 para ser o endereço de linhaA
+    @add r0, r0, #4  @ Soma 4 para o endereço de linhaA
+    @stmia r0!, {r1-r12}  @ armazena o resto dos registradores
+    @mrs r1, cpsr
+    @msr cpsr_ctl, #0b11010011   @ Supervisor (O bit 7 é o I de interrupção. setar ele garante o correto funcionamento)
+    @stmia r0!, {sp, lr}  @ guarda sp e lr próprios do processo
+    @msr cpsr, r1    @ recupera o cpsr
+    @ldr r1, linha_draft
+    @stmia r0!, {r1}  @ é o r0 do programa principal
+    @mrs r1, spsr    @ pega o cpsr do supervisor
+    @stmia r0!, {r1}  @ Guarda o cpsr do processo principal
+    @str lr, linha_draft  @Guarda o pc na primeira posição de linhaA
     @ resultado: pc - r1 a r12 - sp - lr - r0 - cpsr
     @ Confere se linhaA ou linhaB
-    ldr r0, nproc
-    cmp r0, #0
-    adr r1, linha_draft
-    adreq r0, linhaA    @ LinhaA?
-    adrne r0, linhaB    @ Linha B?
+    @ldr r0, nproc
+    @cmp r0, #0
+    @adr r1, linha_draft
+    @adreq r0, linhaA    @ LinhaA?
+    @adrne r0, linhaB    @ Linha B?
     @ Armazena no local apropriado
-    ldmia r1!, {r2-r12} @ r0 - r10
-    stmia r0!, {r2-r12} 
-    ldmia r1!, {r2-r7} @ r11, r12, sp, lr, pc, cpsr
-    stmia r0!, {r2-r7}
+    @ldmia r1!, {r2-r12} @ r0 - r10
+    @stmia r0!, {r2-r12} 
+    @ldmia r1!, {r2-r7} @ r11, r12, sp, lr, pc, cpsr
+    @stmia r0!, {r2-r7}
     @Chaveando
-    adr r0, nproc
-    ldreq r1, =1
-    ldrne r1, =0
-    streq r1, [r0]
-    strne r1, [r0]
+    @adr r0, nproc
+    @ldreq r1, =1
+    @ldrne r1, =0
+    @streq r1, [r0]
+    @strne r1, [r0]
     @ Termina o armazenamento
-    
+
+    @ Chaveando o nproc:
+    ldr r0, nproc
+    add r0, r0, #1
+    ldr r1, num_processos
+    cmp r0, r1
+    moveq r0, #0   @ Quando excede o número de processos, reseta pro 0.
+    str r0, nproc
+
+    @ IRQ HANDLER START ======================= @
     @bl print_interrupt Exercício da aula 10
 
     ldr r0, INTPND  @ Referência para o registrador de status de interrupção
@@ -144,35 +181,58 @@ do_irq_interrupt:
     tst r0, #0x0010 @ testa se a interrupção é do timer (0b0001 0000)
     blne handler_timer   @ Assim sendo, invoca o handler
 
+    @ IRQ HANDLER END ========================  @
+
+    @ Recuperando o conteúdo da linha para os registradores
+    @ Obtenção da linha respectiva do processo
+    adr r0, linhaA
+    ldr r1, linha_size
+    ldr r2, nproc
+    mla r0, r1, r2, r0
+    str r0, linhaX  @ Atualiza linhaX para ser a linha do próximo processo
+    ldr r0, [r0]    @ Pega o cpsr do próximo processo
+    msr cpsr, r0    @ atualiza o cpsr para ser o cpsr do próximo processo
+    ldr r0, linhaX      @ r0 tem o endereço apontado pela linhaX
+    ldr r0, [r0, #56] @ Carrega em r0 o PC dessa linhaX
+    str r0, pc_placeholder  @ Armazeno este pc em pc_placeholder
+    ldr r0, linhaX  
+    add r0, r0, #4  @ r0 aponta para r0 - r12
+    ldmia r0, {r0-r12}  @Recupera r0-r12
+    ldr sp, linhaX      @recupera sp
+    ldr sp, [sp, #60]
+    ldr lr, linhaX
+    ldr lr, [lr, #64]  @recupera lr
+    ldr pc, pc_placeholder  @ Recupera pc
+
     @ Verifica para qual processo voltar
-    ldr r0, nproc
-    cmp r0, #0
+    @ldr r0, nproc
+    @cmp r0, #0
     @ Inicia a recuperação de linhaA
-    adreq r12, linhaA  @ Carrega em r12 o endereço da linhaA
-    adrne r12, linhaB   @ Carrega em r12 o endereço de linhaB
-    add r12, r12, #4
-    ldmia r12!, {r1-r11} @ recupera os registradores r1-r11
-    mov r0, r12
-    ldmia r0!, {r12} 
-    mrs r1, cpsr
-    msr cpsr_ctl, #0b11010011   @ Supervisor
-    ldmia r0!, {sp, lr} @ r0 agora aponta para o valor de pc
-    msr cpsr, r1    @ retorna ao estado de IRQ
-    add r0, r0, #4 @ pula r0
-    ldmia r0!, {r1} @ guarda em r1 o cpsr
-    adreq r0, linhaA
-    adrne r0, linhaB
-    beq retornaA
-retornaB:
-    msr cpsr, r1    @ faz o cpsr voltar ao estado do processo em modo usuário
-    ldr r1, [r0, #4]    @ recupera o valor de r1
-    ldr r0, [r0, #60]   @ recupera o valor de r0
-    ldr pc, linhaB
-retornaA:
-    msr cpsr, r1    @ faz o cpsr voltar ao estado do processo em modo usuário
-    ldr r1, [r0, #4]    @ recupera o valor de r1
-    ldr r0, [r0, #60]   @ recupera o valor de r0
-    ldr pc, linhaA  @ Volta à execução
+    @adreq r12, linhaA  @ Carrega em r12 o endereço da linhaA
+    @adrne r12, linhaB   @ Carrega em r12 o endereço de linhaB
+    @add r12, r12, #4
+    @ldmia r12!, {r1-r11} @ recupera os registradores r1-r11
+    @mov r0, r12
+    @ldmia r0!, {r12} 
+    @mrs r1, cpsr
+    @msr cpsr_ctl, #0b11010011   @ Supervisor
+    @ldmia r0!, {sp, lr} @ r0 agora aponta para o valor de pc
+    @msr cpsr, r1    @ retorna ao estado de IRQ
+    @add r0, r0, #4 @ pula r0
+    @ldmia r0!, {r1} @ guarda em r1 o cpsr
+    @adreq r0, linhaA
+    @adrne r0, linhaB
+    @beq retornaA
+@retornaB:
+    @msr cpsr, r1    @ faz o cpsr voltar ao estado do processo em modo usuário
+    @ldr r1, [r0, #4]    @ recupera o valor de r1
+    @ldr r0, [r0, #60]   @ recupera o valor de r0
+    @ldr pc, linhaB
+@retornaA:
+    @msr cpsr, r1    @ faz o cpsr voltar ao estado do processo em modo usuário
+    @ldr r1, [r0, #4]    @ recupera o valor de r1
+    @ldr r0, [r0, #60]   @ recupera o valor de r0
+    @ldr pc, linhaA  @ Volta à execução
     @ Termina a recuperação da linhaA
     
 
@@ -304,17 +364,18 @@ initialize_stacks:
     MSR cpsr, r0
     LDMFD sp!,{r0,pc}
 
+
 nproc: .word 0
-linhaA: .word 0x1ac
-linhaA_regs: .space 48 @68 - 5 * 4
-linhaA_sp: .word supervisor_stack_top
-linhaA_lr: .word 0
-linhaA_r0: .word 0
-linhaA_cpsr: .word 0x13
-linhaB: .word 0x1c4
-linhaB_regs: .space 48
-linhaB_sp: .word 0x8000
-linhaB_lr: .word 0
-linhaB_r0: .word 0
-linhaB_cpsr: .word 0x13
-linha_draft: .space 68
+num_processos: .word 2
+linha_size: .word 68
+register0_placeholder: .space 4
+register1_placeholder: .space 4
+register2_placeholder: .space 4
+pc_placeholder: .space 4
+linhaX: .word 0
+linhaA: .space 68
+linhaB: .word 0x13
+linhaB_regs: .space 52
+linhaB_pc: .word 0x1a8
+linhaB_sp: .word taskB_stack_top
+linhaB_lr: .space 4
